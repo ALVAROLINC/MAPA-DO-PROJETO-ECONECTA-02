@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mapa de Estabelecimentos</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--azul:#1f3f8f;--azul2:#2c56c4;--fundo:#f6f7fb;--card:#fff;--txt:#1b2233;--mut:#667089;--bor:#dde1ec}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--txt);background:var(--fundo)}
+header{position:fixed;top:0;left:0;right:0;z-index:1000;height:52px;background:var(--azul);color:#fff;display:flex;gap:8px;align-items:center;padding:8px 12px}
+header h1{font-size:15px;margin:0;font-weight:700;white-space:nowrap}
+header form{flex:1;display:flex;gap:6px;min-width:0}
+header input{flex:1;min-width:0;border:0;border-radius:8px;padding:8px 10px;font-size:14px}
+button{font:inherit;cursor:pointer}
+.btn{border:0;border-radius:8px;padding:8px 12px;background:var(--azul2);color:#fff;font-weight:600;font-size:13px}
+.btn.sec{background:#e8ecf8;color:var(--azul)}
+.btn.red{background:#fde8e8;color:#b42318}
+header .btn{background:#fff;color:var(--azul)}
+#tools{position:fixed;top:52px;left:0;right:0;z-index:1000;height:44px;background:#fff;border-bottom:1px solid var(--bor);display:flex;gap:6px;align-items:center;padding:0 10px;overflow-x:auto;white-space:nowrap}
+.tool{border:1px solid var(--bor);background:#fff;color:var(--txt);border-radius:18px;padding:6px 12px;font-size:13px;font-weight:600;flex:0 0 auto}
+.tool.on{background:var(--azul2);border-color:var(--azul2);color:#fff}
+#map{position:fixed;inset:96px 0 0 0}
+#fab{position:fixed;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:1000;display:flex;flex-direction:column;gap:8px}
+#fab button{width:46px;height:46px;border-radius:50%;border:0;background:#fff;box-shadow:0 2px 8px #0003;font-size:19px}
+#fab button.on{background:var(--azul2);color:#fff}
+#hint{position:fixed;left:50%;transform:translateX(-50%);top:106px;z-index:1000;background:#1b2233ee;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;display:none;max-width:90%;text-align:center}
+#drawbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:1050;background:#fff;border-radius:12px;box-shadow:0 4px 16px #0004;padding:8px;display:none;gap:6px;align-items:center}
+#confbar{position:fixed;left:8px;right:8px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:1050;background:#fff;border-radius:12px;box-shadow:0 4px 16px #0004;padding:10px;display:none;flex-direction:column;gap:8px}
+@media(min-width:700px){#confbar{left:50%;right:auto;width:460px;transform:translateX(-50%)}}
+#confbar .row{display:flex;gap:6px}#confbar .btn{flex:1}
+#cinfo{font-size:14px}#cinfo small{color:var(--mut);display:block}
+#aviso{position:fixed;left:8px;right:8px;top:104px;z-index:1060;background:#fff4e5;border:1px solid #f0b35c;color:#5a3b00;border-radius:10px;padding:10px 12px;font-size:13px;display:none;box-shadow:0 3px 10px #0003}
+#aviso .btn{margin-top:8px;padding:6px 12px}
+#drawbar span{font-size:12px;color:var(--mut);padding:0 6px}
+.panel{position:fixed;z-index:1100;background:var(--card);box-shadow:0 -4px 20px #0003;left:0;right:0;bottom:0;max-height:78%;overflow:auto;border-radius:16px 16px 0 0;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));display:none}
+.panel.open{display:block}
+@media(min-width:700px){.panel{left:auto;right:14px;bottom:14px;top:106px;width:380px;max-height:none;border-radius:14px}}
+.panel h2{margin:0 0 10px;font-size:17px}
+label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin:10px 0 3px}
+.panel input,.panel select,.panel textarea{width:100%;border:1px solid var(--bor);border-radius:8px;padding:9px 10px;font:inherit;font-size:14px;background:#fff;color:var(--txt)}
+.panel input[type=color]{padding:2px;height:38px}
+.panel input[type=checkbox]{width:auto}
+.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+.actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.item{border:1px solid var(--bor);border-radius:10px;padding:10px;margin-top:8px;cursor:pointer}
+.item b{display:block}.item small{color:var(--mut)}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;color:#fff;margin-right:6px}
+.pin{width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 5px #0006}
+.pin.aprox{outline:2px dashed #fff;outline-offset:-5px;opacity:.88}
+.pin.ref{border-radius:4px;transform:rotate(45deg)}
+.coord{font-size:12px;color:var(--mut);margin-top:6px}
+.cam{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bor);font-size:14px}
+.cam i{width:14px;height:14px;border-radius:50%;display:inline-block;flex:0 0 auto}
+.cam label{margin:0;flex:1;font-size:14px;color:var(--txt);font-weight:500}
+#sug{position:fixed;z-index:1050;left:12px;right:12px;top:52px;background:#fff;border-radius:0 0 10px 10px;box-shadow:0 6px 18px #0003;max-height:50%;overflow:auto;display:none}
+@media(min-width:700px){#sug{right:auto;width:420px;left:150px}}
+#sug div{padding:9px 12px;border-top:1px solid var(--bor);cursor:pointer;font-size:14px}
+#sug small{display:block;color:var(--mut)}
+.pop b{font-size:14px}.pop div{font-size:12px;color:#667089;margin-top:3px}.pop button{margin-top:8px}.pop .row2{margin-top:6px}.pop a{font-size:12px}
+#confbar a.btn{text-align:center;text-decoration:none;flex:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mapa do Projeto</h1>
+  <form id="busca"><input id="q" placeholder="Buscar estabelecimento ou rua…" autocomplete="off" aria-label="Buscar"><button class="btn">Ir</button></form>
+  <button class="btn" id="btnLista">Lista</button>
+</header>
+<div id="tools">
+  <button class="tool" data-tool="est">＋ Estabelecimento</button>
+  <button class="tool" data-tool="ponto">◆ Ponto</button>
+  <button class="tool" data-tool="linha">〰 Linha</button>
+  <button class="tool" data-tool="area">⬠ Área</button>
+  <button class="tool" id="btnCam">☰ Camadas</button>
+</div>
+<div id="map"></div>
+<div id="aviso"><span id="avisoTxt"></span><br><button class="btn" id="btnRetry">Tentar de novo</button></div>
+<div id="sug"></div>
+<div id="hint"></div>
+<div id="drawbar"><span id="dinfo"></span><button class="btn" id="dOk">Concluir</button><button class="btn sec" id="dUndo">Desfazer</button><button class="btn red" id="dCancel">Cancelar</button></div>
+<div id="confbar"><div id="cinfo"></div><div class="row"><a class="btn sec" id="cG" target="_blank" rel="noopener">Ver no Google Maps</a><a class="btn sec" id="cSV" target="_blank" rel="noopener">Street View</a></div><div class="row"><button class="btn" id="cOk">Confirmar aqui</button><button class="btn sec" id="cSkip">Pular</button><button class="btn red" id="cExit">Sair</button></div></div>
+<div id="fab">
+  <button id="btnGps" title="Meu local">◎</button>
+  <button id="btnSat" title="Satélite">🛰</button>
+</div>
+
+<div class="panel" id="pForm">
+  <h2 id="fTitulo">Novo estabelecimento</h2>
+  <form id="f">
+    <label for="nome">Nome *</label><input id="nome" required>
+    <div class="row">
+      <div><label for="cat">Categoria</label><select id="cat"></select></div>
+      <div><label for="status">Situação</label><select id="status"><option value="pen">Pendente</option><option value="ok">Visitado</option></select></div>
+    </div>
+    <label for="end">Endereço</label><input id="end" placeholder="Rua, número, bairro">
+    <div class="row">
+      <div><label for="tel">Telefone</label><input id="tel" inputmode="tel"></div>
+      <div><label for="resp">Registrado por</label><input id="resp" placeholder="Seu nome"></div>
+    </div>
+    <label for="obs">Observações</label><textarea id="obs" rows="4"></textarea>
+    <div class="coord" id="coord"></div>
+    <div class="actions">
+      <button class="btn" type="submit">Salvar</button>
+      <button class="btn sec" type="button" id="fCancel">Cancelar</button>
+      <button class="btn red" type="button" id="fDel" hidden>Excluir</button>
+    </div>
+  </form>
+</div>
+
+<div class="panel" id="pDes">
+  <h2 id="dTitulo">Desenho</h2>
+  <form id="fd">
+    <label for="dnome">Nome *</label><input id="dnome" required>
+    <label for="dcor">Cor</label><input id="dcor" type="color" value="#d63c4a">
+    <label for="dnota">Anotações</label><textarea id="dnota" rows="4"></textarea>
+    <div class="coord" id="dmed"></div>
+    <div class="actions">
+      <button class="btn" type="submit">Salvar</button>
+      <button class="btn sec" type="button" id="dCancel2">Cancelar</button>
+      <button class="btn red" type="button" id="dDel" hidden>Excluir</button>
+    </div>
+  </form>
+</div>
+
+<div class="panel" id="pCam">
+  <div class="row" style="align-items:center"><h2 style="flex:2">Camadas</h2><button class="btn sec" id="cClose" style="flex:0 0 auto">Fechar</button></div>
+  <div id="camItens"></div>
+  <p class="coord">Pino sólido = achado pelo nome ou endereço exato. Pino tracejado = aproximado. Quem não tem pino aparece na Lista como "sem posição".</p>
+</div>
+
+<div class="panel" id="pLista">
+  <div class="row" style="align-items:center"><h2 style="flex:2">Estabelecimentos (<span id="total">0</span>)</h2><button class="btn sec" id="lClose" style="flex:0 0 auto">Fechar</button></div>
+  <div class="row"><input id="filtro" placeholder="Filtrar por nome…" aria-label="Filtrar"><select id="fcat"><option value="">Todas</option></select></div>
+  <div id="itens"></div>
+  <div class="actions">
+    <button class="btn" id="expKml">Exportar para Google Meu Mapas (KML)</button>
+    <button class="btn" id="expCsv">Planilha (CSV)</button>
+    <button class="btn sec" id="expJson">Salvar backup</button>
+    <button class="btn sec" id="impJson">Importar backup</button>
+    <button class="btn" id="btnConf">Confirmar posições uma a uma</button>
+    <button class="btn sec" id="reloc">Baixar dados do mapa e reposicionar</button>
+    <input type="file" id="file" accept=".json" hidden>
+  </div>
+  <p class="coord" id="osmStatus"></p>
+  <p class="coord">Os dados ficam salvos neste navegador. Para juntar o trabalho do grupo, cada membro envia seu backup e os outros importam.</p>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const CORES={"Comércio":"#2c56c4","Serviço":"#7b3fc4","Alimentação":"#e0662b","Saúde":"#d63c4a","Educação":"#1c9a5b","Religioso":"#8a6d1f","Agropecuário":"#5b8a1f","Outros":"#667089"};
+const KEY="mapa_estabelecimentos_v1";
+const SEED=[{"id": "f02", "nome": "Copiadora Liberdade", "cat": "Serviço", "status": "ok", "end": "Av. Marcelo Déda N°A04", "tel": "7999068885", "resp": "", "obs": "Responsável: Emanuel Farias Santos\nTipo: Copiadora\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 7 e 10 anos\nNova visita: Sim (Qualquer horário, com exceção das 12:00)", "rua": "Avenida Governador Marcelo Déda Chagas", "num": "A04"}, {"id": "f03", "nome": "Posto de Lavagem e Adega São José", "cat": "Alimentação", "status": "ok", "end": "Avenida Governador Marcelo Deda Chagas, 537", "tel": "998663913", "resp": "", "obs": "Responsável: Ruty\nTipo: Posto de Lavagem, adega e espetinho\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Mais de 10 anos\nNova visita: Sim", "rua": "Avenida Governador Marcelo Déda Chagas", "num": "537"}, {"id": "f04", "nome": "FARMAZUL", "cat": "Saúde", "status": "ok", "end": "Avenida Governador João Alves Filho", "tel": "79996462211", "resp": "", "obs": "Responsável: José Francisco\nTipo: Farmácia\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 1 e 3 anos\nNova visita: Sim (Segunda (A partir das 10-11h))", "rua": "Avenida Governador Marcelo Déda Chagas", "num": null}, {"id": "f05", "nome": "Restaurante Família Vilar", "cat": "Alimentação", "status": "ok", "end": "Rua Professor José Adilson Santos, N°04", "tel": "79999594688", "resp": "", "obs": "Responsável: Janael Carvalho Vilar\nTipo: Restaurante\nClassificação: Empresa de Pequeno Porte\nTempo no local: Entre 7 e 10 anos\nNova visita: Sim (Depende do dia)", "rua": "Rua Professor José Adilson Santos", "num": "4"}, {"id": "f06", "nome": "Raul Imports", "cat": "Comércio", "status": "ok", "end": "Rua Almariy Correia,38", "tel": "9988476784", "resp": "", "obs": "Responsável: Raul Ribeiro\nTipo: Importados, eletrônicos, acessórios para celulares\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 4 e 6 anos\nNova visita: Sim (Horário da manhã, horário mais tranquilo por conta do movimento.)", "rua": "Rua Amariy Correia", "num": "38"}, {"id": "f07", "nome": "Yaki massa", "cat": "Alimentação", "status": "ok", "end": "", "tel": "79991263819", "resp": "", "obs": "Responsável: Bruno\nTipo: Restaurante\nClassificação: CNPJ\nTempo no local: Entre 4 e 6 anos\nNova visita: Sim (Marcar horário com proprietário)\nSem rua informada: posição provisória no bairro", "rua": null, "num": null}, {"id": "f08", "nome": "Ws Borracharia", "cat": "Serviço", "status": "ok", "end": "Av. Marcelo Deda Chagas, 50", "tel": "79988495294", "resp": "", "obs": "Responsável: José valdenis\nTipo: Borracharia\nClassificação: Empresário Individual - EI\nTempo no local: Entre 7 e 10 anos\nNova visita: Sim (Pela tarde)", "rua": "Avenida Governador Marcelo Déda Chagas", "num": "50"}, {"id": "f09", "nome": "GM Semi Joias", "cat": "Comércio", "status": "ok", "end": "Rua barão de Mauá, 222 C", "tel": "829990733084", "resp": "", "obs": "Responsável: Paulo Jorge\nTipo: Acessórios\nClassificação: Atividade Informal\nTempo no local: Menos de 1 ano\nNova visita: Sim (Variavel)", "rua": "Rua Barão de Maua", "num": "222"}, {"id": "f10", "nome": "Vem que tem", "cat": "Comércio", "status": "ok", "end": "Rua Amintas Machado de jesus ,126", "tel": "", "resp": "", "obs": "Responsável: Andréia Juliane Santos\nTipo: Papelaria e utilidades\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Menos de 1 ano\nNova visita: Sim (Segunda pela manhã)", "rua": "Rua Amintas Machado de Jesus", "num": "126"}, {"id": "f11", "nome": "Foto arte", "cat": "Serviço", "status": "ok", "end": "Av. governador chagas, 283", "tel": "999346559", "resp": "", "obs": "Responsável: Milton\nTipo: fotografia\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Mais de 10 anos\nNova visita: Sim (quarta feita pela tarde (depois das 14)ou manhã (a partir as 8h))", "rua": "Avenida Governador Marcelo Déda Chagas", "num": "283"}, {"id": "f12", "nome": "ANACLETO MOTORES", "cat": "Serviço", "status": "ok", "end": "AV. GOVERNADOR MARCELO DEDA CHAGAS", "tel": "79998118475", "resp": "", "obs": "Responsável: ANACLETO PINTO\nTipo: OFICINA\nClassificação: Empresário Individual - EI\nTempo no local: Mais de 10 anos\nNova visita: Não", "rua": "Avenida Governador Marcelo Déda Chagas", "num": null}, {"id": "f13", "nome": "PANIFICAÇÃO E MERCADO KI DELICIA", "cat": "Alimentação", "status": "ok", "end": "R. Panificador Silva, 57-1 - Rosa Elze, São Cristóvão - SE, 49100-000", "tel": "79999304321", "resp": "", "obs": "Responsável: EDILENE DA SILVA OLIVEIRA\nTipo: PANIFICIADORA E MERCEARIA\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 7 e 10 anos\nNova visita: Sim (QUALQUER DIA)", "rua": "Rua Panificador José Silva", "num": "57"}, {"id": "f14", "nome": "A SERGIPE HOUSE", "cat": "Comércio", "status": "ok", "end": "Próximo a Farmácia do Trabalhador da Região - FTR - Rua Panificador Jose Silva, N 250 - Rosa Elze, São Cristóvão - SE, 49100-000", "tel": "79991422609", "resp": "", "obs": "Responsável: JOYCE SANTOS\nTipo: Confecções\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 1 e 3 anos\nNova visita: Sim (QUALQUER DIA)", "rua": "Rua Panificador José Silva", "num": "250", "ref": "Farmácia do Trabalhador"}, {"id": "f15", "nome": "Frutaria J.S", "cat": "Alimentação", "status": "ok", "end": "Próximo a Relojoeiro Salomão - R. Barão de Mauá - Rosa Elze, São Cristóvão - SE, 49107-254", "tel": "79998192671", "resp": "", "obs": "Responsável: JOSÉ OSMAR DOS SANTOS\nTipo: Hortifrutis\nClassificação: Atividade Informal\nTempo no local: Entre 4 e 6 anos\nNova visita: Não", "rua": "Rua Barão de Maua", "num": null, "ref": "Relojoeiro Salomão"}, {"id": "f16", "nome": "Salomão Relojoeiro", "cat": "Serviço", "status": "ok", "end": "R. Barão de Mauá - Rosa Elze, São Cristóvão - SE, 49107-254", "tel": "79996656018", "resp": "", "obs": "Responsável: SALOMÃO DIAS RODRIGUES\nTipo: Relojoeiro\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Menos de 1 ano\nNova visita: Não", "rua": "Rua Barão de Maua", "num": null}, {"id": "f17", "nome": "QUITANDA DO PAULISTA", "cat": "Alimentação", "status": "ok", "end": "R. Barão de Mauá, 85 - Rosa Elze, São Cristóvão - SE, 49107-266", "tel": "79988008549", "resp": "", "obs": "Responsável: LUIZ ALFANO\nTipo: Hortifrutis\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 4 e 6 anos\nNova visita: Sim (Qualquer dia após as 16:00)", "rua": "Rua Barão de Maua", "num": "85"}, {"id": "f18", "nome": "SUPRIMONSTER", "cat": "Comércio", "status": "ok", "end": "R. Gov. João Alves Filho, 411 - Rosa Elze, São Cristóvão - SE, 49100-000", "tel": "79999149952", "resp": "", "obs": "Responsável: CLENISTON DE JESUS BRANDÃO FILHO\nTipo: Loja de suplementos\nClassificação: Limitado\nTempo no local: Mais de 10 anos\nNova visita: Sim (Sábado de manhã)", "rua": "Avenida Governador João Alves Filho", "num": "411"}, {"id": "f19", "nome": "BARBEARIA ED", "cat": "Serviço", "status": "ok", "end": "Próximo a BURGUERIZZA AMELHORDA CIDADE - Rosa Elze, São Cristóvão - SE, 49100-000", "tel": "34998129542", "resp": "", "obs": "Responsável: WANDER PYTER TORRES DE OLIVEIRA\nTipo: Barbearia\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Mais de 10 anos\nNova visita: Sim (Qualquer dia, de 08:00 às 20:00)\nSem rua informada: posição provisória no bairro", "rua": null, "num": null, "ref": "Burguerizza"}, {"id": "f20", "nome": "Brechó Novo de Novo", "cat": "Comércio", "status": "ok", "end": "Rua Amriy Correira, 26, Rosa Elze", "tel": "79988058486", "resp": "", "obs": "Responsável: Josemary Almeida Oliveira\nTipo: Brechó\nClassificação: Atividade Informal\nTempo no local: Mais de 10 anos\nNova visita: Sim (Toda semana, a partir das 08:00 até às 19:00)", "rua": "Rua Amariy Correia", "num": "26"}, {"id": "f21", "nome": "Microvilem informática e papelaria", "cat": "Comércio", "status": "ok", "end": "Rua Amariy Correia, 52", "tel": "79991827943", "resp": "", "obs": "Responsável: Welington Vieira de Lenos\nTipo: Papelaria e utilidades\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 1 e 3 anos\nNova visita: Sim (Em dia útil a partir das 09:00)", "rua": "Rua Amariy Correia", "num": "52"}, {"id": "f22", "nome": "Fit 7 academia", "cat": "Saúde", "status": "ok", "end": "Av Marcelo deda 177", "tel": "81575514", "resp": "Marcel de Almeida", "obs": "Responsável: Anderson de jesus\nTipo: Academia\nClassificação: me\nTempo no local: Mais de 10 anos\nNova visita: Sim (Agendamento por whatsapp)", "rua": "Avenida Governador Marcelo Déda Chagas", "num": "177"}, {"id": "f23", "nome": "Dackel Pet Shop", "cat": "Comércio", "status": "ok", "end": "Av. Governador Macelo Deda Chagas, n° 51, Bairro Rosa Elza", "tel": "999980864", "resp": "Maykon Higor Pereira Oliveira", "obs": "Responsável: Ronisson do Santos Brito\nTipo: Pet Shop\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 4 e 6 anos\nNova visita: Sim (De segunda-feira à quarta-feira pela manhã.)", "rua": "Avenida Governador Marcelo Déda Chagas", "num": "51"}, {"id": "f24", "nome": "Connect tech", "cat": "Comércio", "status": "ok", "end": "Rua Panificador Silva 250c", "tel": "799998297051", "resp": "José Henrique Souza Santos", "obs": "Responsável: Victor Augusto\nTipo: Loja de eletrônico\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 4 e 6 anos\nNova visita: Não", "rua": "Rua Panificador José Silva", "num": "250"}, {"id": "f25", "nome": "Smoke Shop", "cat": "Comércio", "status": "ok", "end": "Av. Marcelo Deda Chagas 427 Rosa Elze SC", "tel": "79999103219", "resp": "Johana, Anna, Alana, Jamily, Kennedy", "obs": "Responsável: Kelly Jamile\nTipo: Tabacaria\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 1 e 3 anos\nNova visita: Não", "rua": "Avenida Governador Marcelo Déda Chagas", "num": "427"}, {"id": "f26", "nome": "Rosa elze tênis e calçados", "cat": "Comércio", "status": "ok", "end": "", "tel": "79988239069", "resp": "Anna, Alana, Jamily, Johana, Kennedy", "obs": "Responsável: Damião Oliveira Souza\nTipo: Calçados\nClassificação: Empresário Individual - EI\nTempo no local: Entre 4 e 6 anos\nNova visita: Não\nSem rua informada: posição provisória no bairro", "rua": null, "num": null}, {"id": "f27", "nome": "Lari Estética", "cat": "Serviço", "status": "ok", "end": "Rodovia João Alves Filho, Nº 611", "tel": "79999060011", "resp": "Joaquim, Hugo e Nathalya.", "obs": "Responsável: Luiz Carlos Damaceno de Santana\nTipo: Estética Automotiva\nClassificação: Atividade Informal\nTempo no local: Entre 1 e 3 anos\nNova visita: Sim (Terça à Quinta pela manhã)", "rua": "Avenida Governador João Alves Filho", "num": "611"}, {"id": "f28", "nome": "Retocar Funilaria e Pintura", "cat": "Serviço", "status": "ok", "end": "Avenida João Bebe Água, Nº80", "tel": "79988243554", "resp": "Joaquim, Hugo e Nathalya", "obs": "Responsável: Bruno da Conceição Santos\nTipo: Serviços Automotivos\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 4 e 6 anos\nNova visita: Não", "rua": "Avenida Governador João Alves Filho", "num": "80"}, {"id": "f29", "nome": "Mercearia Sr. Faustino", "cat": "Alimentação", "status": "ok", "end": "Rua amariy Correia, 45", "tel": "79999950334", "resp": "Amanda dos Santos e Hugo", "obs": "Responsável: Paulo Menezes\nTipo: Mercearia\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Mais de 10 anos\nNova visita: Sim (Todos os dias a tarde)", "rua": "Rua Amariy Correia", "num": "45"}, {"id": "f30", "nome": "Frutaria coco verde", "cat": "Alimentação", "status": "ok", "end": "Rua amariy Correia, 9", "tel": "79988149115", "resp": "Amanda dos Santos e Hugo", "obs": "Responsável: Antônio Ferreira dos santos\nTipo: Hortifrutis\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Mais de 10 anos\nNova visita: Sim (Qualquer dia e horário)", "rua": "Rua Amariy Correia", "num": "9"}, {"id": "f32", "nome": "Partiu Viagem", "cat": "Serviço", "status": "ok", "end": "Rua Barão de Mauá", "tel": "79998903745", "resp": "Hugo e Amanda", "obs": "Responsável: Sandra\nTipo: Agência de viagens\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 4 e 6 anos\nNova visita: Sim (Qualquer dia a tarde)", "rua": "Rua Barão de Maua", "num": null}, {"id": "f33", "nome": "Mundo das embalagens", "cat": "Comércio", "status": "ok", "end": "Rua panificador Silva 35", "tel": "79981290657", "resp": "Felipe", "obs": "Responsável: Sandra\nTipo: Embalagens\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 7 e 10 anos\nNova visita: Sim", "rua": "Rua Panificador José Silva", "num": "35"}, {"id": "f34", "nome": "CaboTech Informática", "cat": "Comércio", "status": "ok", "end": "Rua Amariy Correira, 126", "tel": "79991189445", "resp": "Guilherme", "obs": "Responsável: Anderson\nTipo: Loja de informática\nClassificação: Empresário Individual - EI\nTempo no local: Entre 4 e 6 anos\nNova visita: Sim (Período)", "rua": "Rua Amariy Correia", "num": "126"}, {"id": "f35", "nome": "Rosamerinda", "cat": "Comércio", "status": "ok", "end": "Rua Amariy Correia 136", "tel": "79996584441", "resp": "José", "obs": "Responsável: Delbia\nTipo: Roupas\nTempo no local: Entre 7 e 10 anos\nNova visita: Sim (Sexta à tarde depois das 16h ou sábado pela manhã)", "rua": "Rua Amariy Correia", "num": "136"}, {"id": "f36", "nome": "Esmalteria estilo e beleza", "cat": "Serviço", "status": "ok", "end": "Rua Maria Ramos 333", "tel": "79999966635", "resp": "Felipe vicente", "obs": "Responsável: Alexandra\nTipo: Manicure\nClassificação: Sem cadastro\nTempo no local: Entre 7 e 10 anos\nNova visita: Sim (Dia 14,10 horas da manhã)", "rua": "Rua Maria Ramos", "num": "333"}, {"id": "f37", "nome": "Fabio copiadora", "cat": "Comércio", "status": "ok", "end": "Avenida governador João Alves filho, 261", "tel": "79996442600", "resp": "Victor Guilherme Araujo de Souza", "obs": "Responsável: Fabrício\nTipo: Papelaria e utilidades\nClassificação: Cnpj\nTempo no local: Mais de 10 anos\nNova visita: Sim (Sexta-feira 8h)", "rua": "Avenida Governador João Alves Filho", "num": "261"}, {"id": "f38", "nome": "Parças Barbearia", "cat": "Serviço", "status": "ok", "end": "Rua Vereador Wanderlei Marinho, 231", "tel": "", "resp": "Jorge Luis", "obs": "Responsável: Jonas Silva dos Santos\nClassificação: ME\nTempo no local: Entre 7 e 10 anos", "rua": "Rua Vereador Wanderlei Marinho", "num": "231"}, {"id": "f39", "nome": "Thethare", "cat": "Comércio", "status": "ok", "end": "Avenida governador João Alves filho 411", "tel": "79999391120", "resp": "Anna, Alana, Jamily, Johana, Kennedy", "obs": "Responsável: Raissa\nTipo: Loja de vestuário feminino\nClassificação: Empresário Individual - EI\nTempo no local: Entre 1 e 3 anos\nNova visita: Sim (Qualquer horário)", "rua": "Avenida Governador João Alves Filho", "num": "411"}, {"id": "f40", "nome": "Pizzaria do tio nel", "cat": "Alimentação", "status": "ok", "end": "Rua Maria Ramos 150", "tel": "7499819763", "resp": "Nathalya Vieira", "obs": "Responsável: Lucileide calisto\nTipo: Lanchonete\nTempo no local: Entre 1 e 3 anos\nNova visita: Sim (Qualquer dia pela manhã)", "rua": "Rua Maria Ramos", "num": "150"}, {"id": "f41", "nome": "Lili Restaurante", "cat": "Alimentação", "status": "ok", "end": "R. Machado de Jesus, 20", "tel": "79999867760", "resp": "Sivanildo e Patrícia", "obs": "Responsável: Nathan\nTipo: Restaurante\nTempo no local: Entre 7 e 10 anos\nNova visita: Sim (Manhã, até 11h.)", "rua": "Rua Amintas Machado de Jesus", "num": "20"}, {"id": "f42", "nome": "Espaço vida saudável", "cat": "Saúde", "status": "ok", "end": "R. Major Teles de Menezes, 245", "tel": "98846-5482", "resp": "Dêmisson", "obs": "Responsável: Erica\nTipo: Espaço fit\nClassificação: Atividade Informal\nTempo no local: Menos de 1 ano\nNova visita: Sim (Qualquer horário)", "rua": "Rua Major Teles de Menezes", "num": "245"}, {"id": "f44", "nome": "Magarete moveis", "cat": "Comércio", "status": "ok", "end": "Rua Grujim 146", "tel": "79998309315", "resp": "Nathalya Vieira", "obs": "Responsável: Alan de Jesus Santos\nTipo: Loja de moveis\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Mais de 10 anos\nNova visita: Sim (Em torno das 11:00)", "rua": "Rua Grujim", "num": "146"}, {"id": "f45", "nome": "Ohana depósito de bebidas", "cat": "Alimentação", "status": "ok", "end": "Av. Gov. Marcelo Deda Chagas, 455", "tel": "7999394396", "resp": "Henrick Sousa Oliveira", "obs": "Responsável: Sandro\nTipo: Depósito de bebidas\nClassificação: Atividade Informal\nTempo no local: Entre 1 e 3 anos\nNova visita: Sim (Segunda feira pela tarde)", "rua": "Avenida Governador Marcelo Déda Chagas", "num": "455"}, {"id": "f46", "nome": "Libelle boutique", "cat": "Comércio", "status": "ok", "end": "Rua amintay machado, 147", "tel": "79999238183", "resp": "Amanda", "obs": "Responsável: LICIA\nTipo: Loja de roupas\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Menos de 1 ano\nNova visita: Sim (Qualquer horários)", "rua": "Rua Amintas Machado de Jesus", "num": "147"}, {"id": "f47", "nome": "IDK Cell", "cat": "Serviço", "status": "ok", "end": "Rua Grujim 190", "tel": "79998557942", "resp": "Nathalya Vieira", "obs": "Responsável: Lucas Santana Dantas\nTipo: Prestação de Serviço para eletrônicos\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Entre 1 e 3 anos\nNova visita: Sim (Qualquer dia pela tarde)", "rua": "Rua Grujim", "num": "190"}, {"id": "f48", "nome": "Tonys Restaurante", "cat": "Alimentação", "status": "ok", "end": "R. Horácio Souza Lima, 79", "tel": "79981428411", "resp": "Sivanildo e Patrícia", "obs": "Responsável: Josevaldo\nTipo: Restaurante\nClassificação: Atividade Informal\nTempo no local: Menos de 1 ano", "rua": "Rua Horácio Souza Lima", "num": "79"}, {"id": "f49", "nome": "Chaveiro", "cat": "Serviço", "status": "ok", "end": "Rua Grujim", "tel": "7999437492", "resp": "Henrick Sousa Oliveira", "obs": "Responsável: jackson\nTipo: chaveiro\nClassificação: Atividade Informal\nTempo no local: Entre 1 e 3 anos\nNova visita: Não", "rua": "Rua Grujim", "num": null}, {"id": "f50", "nome": "Varbearia vieira", "cat": "Serviço", "status": "ok", "end": "Rua Maria Ramos- Rosa Else, 260", "tel": "7988545467", "resp": "Erick Dantas", "obs": "Responsável: Aladilson Vieira\nTipo: Barbearia\nClassificação: Autônomo\nTempo no local: Entre 1 e 3 anos\nNova visita: Sim", "rua": "Rua Maria Ramos", "num": "260"}, {"id": "f51", "nome": "We Empório", "cat": "Comércio", "status": "ok", "end": "Rua Amaury Correa, Galeria Terreo, em Frente a Florata - Rosa Else", "tel": "7996533958", "resp": "Jorge Luis", "obs": "Responsável: Wagner da Silva Chagas\nTipo: Empório\nClassificação: Microempreendedor Individual - MEI\nTempo no local: Menos de 1 ano\nNova visita: Sim (Dia todo, menos aos Domingos)", "rua": "Rua Amariy Correia", "num": null, "ref": "Florata"}];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function load(k,d){try{const v=JSON.parse(localStorage.getItem(k)||"null");return v==null?d:v}catch(e){return d}}
+function put(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+
+let dados=load(KEY,[]),desenhos=load(KEY+"_des",[]),removidos=load(KEY+"_rem",[]);
+if(!load(KEY+"_geo6",false)){ // zera posições automáticas antigas; mantém só o que o usuário confirmou
+  dados.forEach(d=>{
+    if(/^f\d/.test(d.id)){if(d.aprox===false&&!d.como){d.confirmado=true}else{d.lat=null;d.lng=null;d.aprox=true;d.confirmado=false}}
+    else d.confirmado=true});
+  put(KEY+"_geo6",true);
+}
+SEED.forEach(s=>{if(!removidos.includes(s.id)&&!dados.some(d=>d.id===s.id))dados.push(Object.assign({},s,{lat:null,lng:null,aprox:true}))});
+const salvar=()=>put(KEY,dados), salvarDes=()=>put(KEY+"_des",desenhos);
+
+//<PURE>
+const norm=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+const STOP=new Set("rua avenida av rodovia travessa tv governador gov professor prof vereador major doutor dr de da do dos das e".split(" "));
+const toks=s=>norm(s).replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(t=>t&&!STOP.has(t));
+function lev(a,b){const m=[];for(let i=0;i<=a.length;i++){m[i]=[i];}for(let j=1;j<=b.length;j++)m[0][j]=j;
+  for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)m[i][j]=Math.min(m[i-1][j]+1,m[i][j-1]+1,m[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return m[a.length][b.length]}
+const srt=s=>s.split("").sort().join("");
+function perto(a,b){if(a===b)return true;const m=Math.max(a.length,b.length);if(m<5)return false;return lev(a,b)<=(m>=6?2:1)||srt(a)===srt(b)}
+function score(a,b){const A=toks(a),B=toks(b);if(!A.length||!B.length)return 0;return A.filter(x=>B.some(y=>perto(x,y))).length/Math.max(A.length,B.length)}
+const ALIAS={"joao bebe agua":"Governador João Alves Filho"};
+function nomesOsm(ruas,nome){
+  const pontua=n=>Object.keys(ruas).map(k=>[k,score(n,k)]).filter(x=>x[1]>=0.6).sort((x,y)=>y[1]-x[1]).map(x=>x[0]);
+  let ks=pontua(nome);
+  if(!ks.length){const al=ALIAS[toks(nome).join(" ")];if(al)ks=pontua(al)}
+  return ks;
+}
+const M=111320;
+function metros(a,b){const kx=Math.cos((a[0]+b[0])/2*Math.PI/180);return Math.hypot((a[0]-b[0])*M,(a[1]-b[1])*M*kx)}
+function ordena(pts){
+  const lat0=pts.reduce((s,p)=>s+p[0],0)/pts.length,kx=Math.cos(lat0*Math.PI/180);
+  const xy=pts.map(p=>[p[1]*kx,p[0]]);const mx=xy.reduce((s,p)=>s+p[0],0)/xy.length,my=xy.reduce((s,p)=>s+p[1],0)/xy.length;
+  let sxx=0,syy=0,sxy=0;xy.forEach(p=>{sxx+=(p[0]-mx)**2;syy+=(p[1]-my)**2;sxy+=(p[0]-mx)*(p[1]-my)});
+  const ang=0.5*Math.atan2(2*sxy,sxx-syy),ux=Math.cos(ang),uy=Math.sin(ang);
+  return pts.map((p,i)=>({p,t:(xy[i][0]-mx)*ux+(xy[i][1]-my)*uy})).sort((a,b)=>a.t-b.t).map(o=>o.p);
+}
+function pontoNaLinha(linha,f,lado,off){
+  const cum=[0];for(let i=1;i<linha.length;i++)cum.push(cum[i-1]+metros(linha[i-1],linha[i]));
+  const tot=cum[cum.length-1]||1,alvo=f*tot;let i=1;while(i<cum.length-1&&cum[i]<alvo)i++;
+  const a=linha[i-1],b=linha[i],seg=(cum[i]-cum[i-1])||1,t=Math.min(1,Math.max(0,(alvo-cum[i-1])/seg));
+  let lat=a[0]+(b[0]-a[0])*t,lng=a[1]+(b[1]-a[1])*t;
+  const kx=Math.cos(lat*Math.PI/180),dx=(b[1]-a[1])*kx,dy=b[0]-a[0],n=Math.hypot(dx,dy)||1;
+  lat+=(dx/n)*lado*off/M;lng+=(-dy/n)*lado*off/(M*kx);
+  return [lat,lng];
+}
+function hash(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return h}
+const GENERIC=new Set("restaurante barbearia loja farmacia mercado mercearia padaria panificacao panificadora copiadora papelaria academia pet shop informatica boutique brecho frutaria quitanda deposito bebidas estetica oficina borracharia lanchonete pizzaria espaco emporio semi joias acessorios eletronicos eletronico moveis calcados tenis roupas utilidades embalagens fotografia chaveiro agencia viagens hortifruti supermercado salao".split(" "));
+const distintivos=s=>[...new Set(toks(s).filter(x=>!GENERIC.has(x)&&x.length>=2))];
+const compacto=a=>a.join("");
+function acharPoi(osm,nome,centro){
+  const D=distintivos(nome);if(!D.length)return null;
+  let melhor=null,bs=0.7,bd=1e18;
+  (osm.pois||[]).forEach(p=>{
+    const P=distintivos(p[0]);if(!P.length)return;
+    const d=metros([p[1],p[2]],centro);if(d>(osm.semRuas?1800:900))return;
+    const hit=D.filter(x=>P.some(y=>perto(x,y))).length;
+    let sc=hit/Math.max(D.length,P.length);
+    const a=compacto(D),b=compacto(P);
+    if(a===b||(Math.min(D.length,P.length)===1&&Math.min(a.length,b.length)>=5&&(a.includes(b)||b.includes(a))))sc=Math.max(sc,0.9);
+    if(sc>bs||(sc===bs&&melhor&&d<bd)){bs=sc;bd=d;melhor=p}
+  });
+  return melhor;
+}
+function afasta(res,ids){
+  for(let it=0;it<10;it++){let mov=false;
+    for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
+      const a=res[ids[i]],b=res[ids[j]],d=metros([a.lat,a.lng],[b.lat,b.lng]);
+      if(d>=16)continue;
+      const alvo=b.aprox?b:(a.aprox?a:null);if(!alvo)continue;
+      const ang=((hash(ids[j])+it*47)%360)*Math.PI/180,mv=18-d;
+      alvo.lat+=Math.cos(ang)*mv/M;alvo.lng+=Math.sin(ang)*mv/(M*Math.cos(alvo.lat*Math.PI/180));mov=true}
+    if(!mov)break}
+}
+function agrupa(linhas){
+  const n=linhas.length,p=[];for(let i=0;i<n;i++)p.push(i);
+  const f=i=>{while(p[i]!==i){p[i]=p[p[i]];i=p[i]}return i};
+  const pts=linhas.map(l=>[l[0],l[l.length-1]]);
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+    if(pts[i].some(a=>pts[j].some(b=>metros(a,b)<45)))p[f(i)]=f(j)}
+  const g={};linhas.forEach((l,i)=>{(g[f(i)]=g[f(i)]||[]).push(...l)});
+  return Object.values(g).map(ps=>({pts:ps,c:[ps.reduce((s,x)=>s+x[0],0)/ps.length,ps.reduce((s,x)=>s+x[1],0)/ps.length]}));
+}
+function distMin(g,c){let m=1e18;for(const p of g.pts){const d=metros(p,c);if(d<m)m=d}return m}
+function posicionar(osm,regs){
+  const nomes=[...new Set(regs.map(r=>r.rua).filter(Boolean))];
+  const cand={},osmNome={};
+  nomes.forEach(n=>{const ks=nomesOsm(osm.ruas,n);osmNome[n]=ks[0];cand[n]=agrupa(ks.flatMap(k=>osm.ruas[k]))});
+  // Centro do bairro: ponto onde mais ruas da planilha existem ao mesmo tempo (descarta ruas homônimas de outros bairros)
+  let centro=null,melhor=-1,soma=1e18;
+  nomes.forEach(n=>cand[n].forEach(g=>{
+    let cnt=0,sd=0;
+    nomes.forEach(m=>{let d=1e18;cand[m].forEach(h=>{d=Math.min(d,distMin(h,g.c))});if(d<450){cnt++;sd+=d}});
+    if(cnt>melhor||(cnt===melhor&&sd<soma)){melhor=cnt;soma=sd;centro=g.c}}));
+  if(!centro){const ps=osm.pois||[];centro=ps.length?[ps.reduce((s,p)=>s+p[1],0)/ps.length,ps.reduce((s,p)=>s+p[2],0)/ps.length]:[-10.9275,-37.1070]}
+  const linhaDe={};
+  nomes.forEach(n=>{
+    let g=null,d=700;cand[n].forEach(h=>{const x=distMin(h,centro);if(x<d){d=x;g=h}});
+    if(!g)return;
+    let pts=g.pts.filter(p=>metros(p,centro)<600);if(pts.length<2)pts=g.pts;
+    if(pts.length>1)linhaDe[n]=ordena(pts);
+  });
+  const resultado={},usados={};
+  const marca=(r,pos,aprox,como,rot)=>{
+    const key=pos[0].toFixed(5)+","+pos[1].toFixed(5);const n=usados[key]=(usados[key]||0)+1;
+    if(n>1){const a=(n-1)*2.4;pos=[pos[0]+Math.cos(a)*6/M,pos[1]+Math.sin(a)*6/(M*Math.cos(pos[0]*Math.PI/180))]}
+    resultado[r.id]={lat:pos[0],lng:pos[1],aprox,como,rua:rot||osmNome[r.rua]||""};
+  };
+  const feito={};
+  regs.forEach(r=>{const p=acharPoi(osm,r.nome,centro);if(p){feito[r.id]=1;marca(r,[p[1],p[2]],false,"ponto no mapa","ponto no mapa: "+p[0])}});
+  regs.forEach(r=>{if(feito[r.id]||!r.ref)return;const p=acharPoi(osm,r.ref,centro);
+    if(p){feito[r.id]=1;const a=(hash(r.id)%360)*Math.PI/180;marca(r,[p[1]+Math.cos(a)*14/M,p[2]+Math.sin(a)*14/(M*Math.cos(p[1]*Math.PI/180))],true,"perto de referência","perto de "+p[0])}});
+  const porRua={};
+  regs.forEach(r=>{if(!feito[r.id]&&r.rua&&linhaDe[r.rua])(porRua[r.rua]=porRua[r.rua]||[]).push(r)});
+  Object.keys(porRua).forEach(n=>{
+    const lst=porRua[n],L=linhaDe[n],ex={};
+    lst.forEach(r=>{if(/^\d+$/.test(String(r.num||""))){const e=osmEnd(osm,n,r.num,centro);if(e){ex[r.id]=1;marca(r,e,false,"endereço exato")}}});
+    const nums=lst.filter(r=>!ex[r.id]&&/^\d+$/.test(String(r.num||""))).sort((a,b)=>a.num-b.num);
+    nums.forEach((r,i)=>{const f=nums.length>1?0.12+0.76*i/(nums.length-1):0.5;marca(r,pontoNaLinha(L,f,r.num%2?1:-1,9),true,"na rua")});
+    lst.filter(r=>!ex[r.id]&&!/^\d+$/.test(String(r.num||""))).forEach(r=>{const f=0.1+0.8*((hash(r.id)%100)/100);marca(r,pontoNaLinha(L,f,hash(r.id)%2?1:-1,9),true,"na rua")});
+  });
+  regs.forEach(r=>{if(resultado[r.id])return;const h=hash(r.id),a=(h%360)*Math.PI/180,d=60+(h>>4)%140;
+    resultado[r.id]={lat:centro[0]+Math.cos(a)*d/M,lng:centro[1]+Math.sin(a)*d/(M*Math.cos(centro[0]*Math.PI/180)),aprox:true,como:"sem rua",rua:""}});
+  afasta(resultado,Object.keys(resultado));
+  return resultado;
+}
+function osmEnd(osm,rua,num,centro){
+  for(const e of osm.ends){if(String(e[1]).replace(/\D/g,"")===String(num)&&score(rua,e[0])>=0.8&&metros([e[2],e[3]],centro)<700)return[e[2],e[3]]}
+  return null;
+}
+//</PURE>
+
+// ---- Mapa ----
+const osmL=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"});
+const satL=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Esri"});
+const map=L.map("map",{layers:[osmL],zoomControl:false}).setView([-10.9255,-37.1055],16);
+L.control.zoom({position:"topleft"}).addTo(map);
+let satOn=false;
+$("btnSat").onclick=()=>{satOn=!satOn;if(satOn){map.removeLayer(osmL);satL.addTo(map)}else{map.removeLayer(satL);osmL.addTo(map)}$("btnSat").classList.toggle("on",satOn)};
+const camada=L.layerGroup().addTo(map),camDes=L.layerGroup().addTo(map);
+const markers={};
+const catOculta=new Set(load(KEY+"_hide",[])); let desVisivel=true;
+Object.keys(CORES).forEach(k=>{$("cat").add(new Option(k,k));$("fcat").add(new Option(k,k))});
+let mostraEst=load(KEY+"_est",false);
+const oculto=e=>!e.confirmado&&!mostraEst&&(e.como==="na rua"||e.como==="sem rua");
+const rotulo=e=>e.confirmado?"posição confirmada":(e.aprox?"posição aproximada":"achado pelo nome no mapa (confira)");
+const linkG=e=>"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(e.nome+" "+(e.end||"")+" Rosa Elze São Cristóvão SE");
+const linkSV=(la,lo)=>`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${la},${lo}`;
+const icone=e=>L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,26],html:`<div class="pin ${e.aprox?"aprox":""}" style="background:${CORES[e.cat]||"#667089"}"></div>`});
+const icoRef=cor=>L.divIcon({className:"",iconSize:[22,22],iconAnchor:[11,11],html:`<div class="pin ref" style="background:${cor}"></div>`});
+function hint(t,ms){const h=$("hint");if(!t){h.style.display="none";return}h.textContent=t;h.style.display="block";if(ms)setTimeout(()=>{if(h.textContent===t)h.style.display="none"},ms)}
+
+let editId=null,pendente=null,pinTemp=null,modo=null,vert=[],tmpLayer=null,desEdit=null,confMk=null,fila=[],fi=0,unico=false,moveu=false,confAtual=null;
+function paineis(){["pForm","pLista","pCam","pDes"].forEach(i=>$(i).classList.remove("open"))}
+function limpaTemp(){if(pinTemp){map.removeLayer(pinTemp);pinTemp=null}if(tmpLayer){map.removeLayer(tmpLayer);tmpLayer=null}vert=[];$("drawbar").style.display="none";if(confMk){map.removeLayer(confMk);confMk=null}$("confbar").style.display="none"}
+function setModo(m){
+  modo=m;document.querySelectorAll(".tool[data-tool]").forEach(b=>b.classList.toggle("on",b.dataset.tool===m));
+  hint(m==="est"?"Toque no mapa onde fica o estabelecimento":m==="ponto"?"Toque no mapa para marcar um ponto":m==="linha"?"Toque para adicionar pontos da linha":m==="area"?"Toque para marcar os cantos da área":"");
+  if(m==="linha"||m==="area"){$("drawbar").style.display="flex";atualizaBarra()}else $("drawbar").style.display="none";
+}
+function fechar(){paineis();limpaTemp();setModo(null);pendente=null;desEdit=null;editId=null;unico=false;moveu=false;confAtual=null;desenhar()}
+
+// ---- Estabelecimentos ----
+function desenhar(){
+  camada.clearLayers();Object.keys(markers).forEach(k=>delete markers[k]);
+  dados.forEach(e=>{
+    if(typeof e.lat!=="number"||catOculta.has(e.cat)||oculto(e))return;
+    const m=L.marker([e.lat,e.lng],{icon:icone(e)}).addTo(camada);
+    m.bindTooltip(esc(e.nome));
+    m.bindPopup(`<div class="pop"><b>${esc(e.nome)}</b><div>${esc(e.cat)} · ${rotulo(e)}</div>${e.ruaOsm&&!e.confirmado?`<div>${esc(e.ruaOsm)}</div>`:""}<div>${esc(e.end)}</div><div>${esc(e.tel)}</div><div class="row2"><button class="btn" data-ed="${e.id}">Editar</button> <button class="btn sec" data-mv="${e.id}">Mover pino</button></div><div class="row2"><a href="${linkG(e)}" target="_blank" rel="noopener">Google Maps</a> · <a href="${linkSV(e.lat,e.lng)}" target="_blank" rel="noopener">Street View</a></div></div>`);
+    markers[e.id]=m;
+  });
+  $("total").textContent=dados.length;listar();desenharDes();camadas();
+}
+function listar(){
+  const f=norm($("filtro").value),c=$("fcat").value;
+  $("itens").innerHTML=dados.filter(e=>(!f||norm(e.nome).includes(f))&&(!c||e.cat===c)).map(e=>
+   `<div class="item" data-id="${e.id}"><b>${esc(e.nome)}</b><span class="tag" style="background:${CORES[e.cat]||"#667089"}">${esc(e.cat)}</span><small>${oculto(e)?"sem posição · toque para posicionar":rotulo(e)}${e.end?" · "+esc(e.end):""}</small></div>`).join("")||'<p class="coord">Nenhum registro ainda.</p>';
+}
+function abrirItem(id){const e=dados.find(x=>x.id===id);if(!e)return;if(oculto(e)||typeof e.lat!=="number"){$("sug").style.display="none";iniciaMover(e)}else irPara(id)}
+$("itens").onclick=ev=>{const it=ev.target.closest(".item");if(it)abrirItem(it.dataset.id)};
+$("filtro").oninput=listar;$("fcat").onchange=listar;
+function irPara(id){const e=dados.find(x=>x.id===id);if(!e||typeof e.lat!=="number")return;
+  const hid=catOculta.delete(e.cat);if(hid)put(KEY+"_hide",[...catOculta]);
+  paineis();$("sug").style.display="none";desenhar();map.flyTo([e.lat,e.lng],18);setTimeout(()=>markers[id]&&markers[id].openPopup(),700)}
+map.on("popupopen",ev=>{const el=ev.popup.getElement();
+  const b=el.querySelector("[data-ed]");if(b)b.onclick=()=>{const e=dados.find(x=>x.id===b.dataset.ed);map.closePopup();abrirForm(e)};
+  const mv=el.querySelector("[data-mv]");if(mv)mv.onclick=()=>{const e=dados.find(x=>x.id===mv.dataset.mv);map.closePopup();iniciaMover(e)};
+  const d=el.querySelector("[data-dd]");if(d)d.onclick=()=>{const x=desenhos.find(y=>y.id===d.dataset.dd);map.closePopup();abrirDes(x)}});
+
+function abrirForm(e){
+  paineis();limpaTemp();setModo(null);editId=e?e.id:null;moveu=false;
+  $("fTitulo").textContent=e?"Editar estabelecimento":"Novo estabelecimento";
+  $("nome").value=e?e.nome:"";$("cat").value=e?e.cat:"Comércio";$("status").value=e?e.status:"pen";
+  $("end").value=e?e.end:"";$("tel").value=e?e.tel:"";$("obs").value=e?e.obs:"";
+  let r="";try{r=localStorage.getItem("mapa_resp")||""}catch(x){}
+  $("resp").value=e?e.resp:r;
+  if(e){pendente={lat:e.lat,lng:e.lng};
+    pinTemp=L.marker([e.lat,e.lng],{draggable:true}).addTo(map);
+    pinTemp.on("dragend",()=>{const p=pinTemp.getLatLng();pendente={lat:p.lat,lng:p.lng};moveu=true;$("coord").textContent=`Posição ajustada: ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`});
+    if(markers[e.id])camada.removeLayer(markers[e.id]);
+    map.panTo([e.lat,e.lng])}
+  $("coord").textContent=pendente?(e&&e.aprox?"Para mudar o lugar, arraste o pino azul no mapa (ou use Mover pino no balão).":`Localização: ${pendente.lat.toFixed(6)}, ${pendente.lng.toFixed(6)}`):"";
+  $("fDel").hidden=!e;$("pForm").classList.add("open");
+}
+$("f").onsubmit=ev=>{ev.preventDefault();if(!pendente)return;
+  const reg={id:editId||("e"+Date.now().toString(36)),nome:$("nome").value.trim(),cat:$("cat").value,status:$("status").value,end:$("end").value.trim(),tel:$("tel").value.trim(),resp:$("resp").value.trim(),obs:$("obs").value.trim(),lat:pendente.lat,lng:pendente.lng,aprox:false,confirmado:true,data:new Date().toISOString()};
+  const old=dados.find(x=>x.id===reg.id);
+  if(old){Object.assign(reg,{rua:old.rua,num:old.num,ref:old.ref,ruaOsm:old.ruaOsm,como:old.como});if(!old.confirmado&&!moveu){reg.confirmado=false;reg.aprox=old.aprox}}
+  try{localStorage.setItem("mapa_resp",reg.resp)}catch(x){}
+  const i=dados.findIndex(x=>x.id===reg.id);if(i>=0)dados[i]=reg;else dados.push(reg);
+  salvar();fechar()};
+$("fCancel").onclick=fechar;
+let armado=false;
+$("fDel").onclick=()=>{if(!armado){armado=true;$("fDel").textContent="Toque de novo para excluir";setTimeout(()=>{armado=false;$("fDel").textContent="Excluir"},3000);return}
+  if(editId&&/^f\d/.test(editId)){removidos.push(editId);put(KEY+"_rem",removidos)}
+  dados=dados.filter(x=>x.id!==editId);salvar();armado=false;$("fDel").textContent="Excluir";fechar()};
+
+// ---- Desenhos (pontos, linhas, áreas) ----
+function comprimento(p){let s=0;for(let i=1;i<p.length;i++)s+=metros(p[i-1],p[i]);return s}
+function areaM2(p){const lat0=p.reduce((s,x)=>s+x[0],0)/p.length,kx=Math.cos(lat0*Math.PI/180);
+  const xy=p.map(x=>[x[1]*M*kx,x[0]*M]);let a=0;for(let i=0;i<xy.length;i++){const j=(i+1)%xy.length;a+=xy[i][0]*xy[j][1]-xy[j][0]*xy[i][1]}return Math.abs(a/2)}
+const fmtD=m=>m>=1000?(m/1000).toFixed(2)+" km":Math.round(m)+" m";
+const fmtA=a=>a>=10000?(a/10000).toFixed(2)+" ha":Math.round(a)+" m²";
+function medida(d){return d.tipo==="linha"?"Comprimento: "+fmtD(comprimento(d.pts)):d.tipo==="area"?"Área: "+fmtA(areaM2(d.pts))+" · Perímetro: "+fmtD(comprimento(d.pts.concat([d.pts[0]]))):""}
+function desenharDes(){
+  camDes.clearLayers();if(!desVisivel)return;
+  desenhos.forEach(d=>{
+    let l;
+    if(d.tipo==="ponto")l=L.marker(d.pts[0],{icon:icoRef(d.cor)});
+    else if(d.tipo==="linha")l=L.polyline(d.pts,{color:d.cor,weight:5});
+    else l=L.polygon(d.pts,{color:d.cor,weight:3,fillOpacity:.25});
+    l.bindTooltip(esc(d.nome),{sticky:true});
+    l.bindPopup(`<div class="pop"><b>${esc(d.nome)}</b><div>${esc(medida(d))}</div><div>${esc(d.nota)}</div><button class="btn" data-dd="${d.id}">Editar</button></div>`);
+    l.addTo(camDes)});
+}
+function atualizaBarra(){
+  const n=vert.length;$("dinfo").textContent=modo==="linha"?(n?fmtD(comprimento(vert)):"0 pontos"):(n>2?fmtA(areaM2(vert)):n+" pontos");
+  if(tmpLayer){map.removeLayer(tmpLayer);tmpLayer=null}
+  if(n){tmpLayer=(modo==="area"&&n>2?L.polygon(vert,{color:"#d63c4a",dashArray:"6 6"}):L.polyline(vert,{color:"#d63c4a",dashArray:"6 6"})).addTo(map)}
+}
+$("dUndo").onclick=()=>{vert.pop();atualizaBarra()};
+$("dCancel").onclick=fechar;
+$("dOk").onclick=()=>{const min=modo==="linha"?2:3;if(vert.length<min){hint(`Marque pelo menos ${min} pontos`,2500);return}
+  const pts=vert.slice(),tipo=modo;limpaTemp();setModo(null);abrirDes({id:null,tipo,nome:"",cor:tipo==="linha"?"#2c56c4":"#d63c4a",nota:"",pts})};
+function abrirDes(d){
+  paineis();desEdit=d;
+  $("dTitulo").textContent=(d.id?"Editar ":"Novo ")+(d.tipo==="ponto"?"ponto":d.tipo==="linha"?"linha":"área");
+  $("dnome").value=d.nome;$("dcor").value=d.cor;$("dnota").value=d.nota;$("dmed").textContent=medida(d);
+  $("dDel").hidden=!d.id;
+  if(d.tipo==="ponto"&&d.id){pinTemp=L.marker(d.pts[0],{draggable:true}).addTo(map);pinTemp.on("dragend",()=>{const p=pinTemp.getLatLng();desEdit.pts=[[p.lat,p.lng]]})}
+  $("pDes").classList.add("open");
+}
+$("fd").onsubmit=ev=>{ev.preventDefault();const d=desEdit;if(!d)return;
+  d.nome=$("dnome").value.trim();d.cor=$("dcor").value;d.nota=$("dnota").value.trim();
+  if(!d.id){d.id="d"+Date.now().toString(36);desenhos.push(d)}
+  salvarDes();fechar()};
+$("dCancel2").onclick=fechar;
+let armD=false;
+$("dDel").onclick=()=>{if(!armD){armD=true;$("dDel").textContent="Toque de novo para excluir";setTimeout(()=>{armD=false;$("dDel").textContent="Excluir"},3000);return}
+  desenhos=desenhos.filter(x=>x.id!==desEdit.id);salvarDes();armD=false;$("dDel").textContent="Excluir";fechar()};
+
+// ---- Cliques no mapa / ferramentas ----
+document.querySelectorAll(".tool[data-tool]").forEach(b=>b.onclick=()=>{const m=b.dataset.tool;const era=modo===m;fechar();if(!era)setModo(m)});
+map.on("click",ev=>{
+  $("sug").style.display="none";
+  if(modo==="est"){const p={lat:ev.latlng.lat,lng:ev.latlng.lng};abrirForm(null);pendente=p;
+    pinTemp=L.marker(ev.latlng,{draggable:true}).addTo(map);
+    pinTemp.on("dragend",()=>{const q=pinTemp.getLatLng();pendente={lat:q.lat,lng:q.lng};moveu=true;$("coord").textContent=`Localização: ${q.lat.toFixed(6)}, ${q.lng.toFixed(6)}`});
+    $("coord").textContent=`Localização: ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`}
+  else if(modo==="conf"&&confMk){confMk.setLatLng(ev.latlng);linksConf()}
+  else if(modo==="ponto"){const pts=[[ev.latlng.lat,ev.latlng.lng]];setModo(null);abrirDes({id:null,tipo:"ponto",nome:"",cor:"#d63c4a",nota:"",pts})}
+  else if(modo==="linha"||modo==="area"){vert.push([ev.latlng.lat,ev.latlng.lng]);atualizaBarra()}
+});
+
+// ---- Camadas ----
+function camadas(){
+  const cont={};dados.forEach(e=>cont[e.cat]=(cont[e.cat]||0)+1);
+  $("camItens").innerHTML=Object.keys(CORES).map(k=>`<div class="cam"><i style="background:${CORES[k]}"></i><label for="c_${k}">${k} (${cont[k]||0})</label><input type="checkbox" id="c_${k}" data-cat="${k}" ${catOculta.has(k)?"":"checked"}></div>`).join("")+
+   `<div class="cam"><i style="background:#999"></i><label for="c_est">Estimados pela rua (não confirmados)</label><input type="checkbox" id="c_est" ${mostraEst?"checked":""}></div>`+
+   `<div class="cam"><i style="background:#d63c4a;border-radius:3px"></i><label for="c_des">Meus desenhos (${desenhos.length})</label><input type="checkbox" id="c_des" ${desVisivel?"checked":""}></div>`;
+}
+$("camItens").onchange=ev=>{const t=ev.target;
+  if(t.id==="c_des"){desVisivel=t.checked}else if(t.id==="c_est"){mostraEst=t.checked;put(KEY+"_est",mostraEst)}else{t.checked?catOculta.delete(t.dataset.cat):catOculta.add(t.dataset.cat);put(KEY+"_hide",[...catOculta])}
+  desenhar()};
+$("btnCam").onclick=()=>{const a=!$("pCam").classList.contains("open");fechar();if(a){camadas();$("pCam").classList.add("open")}};
+$("cClose").onclick=fechar;
+$("btnLista").onclick=()=>{const a=!$("pLista").classList.contains("open");fechar();if(a){listar();$("pLista").classList.add("open")}};
+$("lClose").onclick=fechar;
+
+// ---- GPS e busca ----
+$("btnGps").onclick=()=>{
+  if(!navigator.geolocation){hint("Seu navegador não tem GPS",2500);return}
+  navigator.geolocation.getCurrentPosition(p=>{const ll=[p.coords.latitude,p.coords.longitude];map.flyTo(ll,18);
+    L.circleMarker(ll,{radius:8,color:"#fff",weight:3,fillColor:"#2c56c4",fillOpacity:1}).addTo(map)},
+    ()=>hint("Não foi possível obter sua localização",2500),{enableHighAccuracy:true});
+};
+$("q").addEventListener("input",()=>{
+  const t=norm($("q").value.trim()),box=$("sug");if(t.length<2){box.style.display="none";return}
+  const r=dados.filter(e=>norm(e.nome+" "+e.end+" "+e.cat+" "+(e.obs||"")).includes(t)).slice(0,8);
+  box.innerHTML=r.map(e=>`<div data-id="${e.id}"><b>${esc(e.nome)}</b><small>${esc(e.cat)}${e.end?" · "+esc(e.end):""}</small></div>`).join("");
+  box.style.display=r.length?"block":"none"});
+$("sug").onclick=ev=>{const d=ev.target.closest("[data-id]");if(d)abrirItem(d.dataset.id)};
+$("busca").onsubmit=async ev=>{ev.preventDefault();$("sug").style.display="none";const q=$("q").value.trim();if(!q)return;
+  hint("Buscando…");
+  try{const j=await(await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&viewbox=-37.20,-10.85,-37.00,-11.00&q="+encodeURIComponent(q))).json();
+    if(j[0]){map.flyTo([+j[0].lat,+j[0].lon],18);hint("")}else hint("Endereço não encontrado",2500)}
+  catch(e){hint("Falha na busca. Verifique a internet.",2500)}};
+
+// ---- Exportar / importar ----
+function baixar(nome,texto,tipo){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([texto],{type:tipo}));a.download=nome;document.body.appendChild(a);a.click();a.remove()}
+$("expCsv").onclick=()=>{const cols=["nome","cat","status","end","tel","resp","obs","lat","lng","data"];
+  const linha=e=>cols.map(c=>'"'+String(e[c]==null?"":e[c]).replace(/"/g,'""')+'"').join(";");
+  baixar("estabelecimentos.csv","﻿"+cols.join(";")+"\n"+dados.filter(e=>typeof e.lat==="number").map(linha).join("\n"),"text/csv")};
+$("expJson").onclick=()=>baixar("backup-mapa.json",JSON.stringify({v:2,estabelecimentos:dados,desenhos},null,1),"application/json");
+$("impJson").onclick=()=>$("file").click();
+$("file").onchange=async()=>{const f=$("file").files[0];if(!f)return;
+  try{const j=JSON.parse(await f.text());const est=Array.isArray(j)?j:j.estabelecimentos,des=Array.isArray(j)?[]:(j.desenhos||[]);
+    if(!Array.isArray(est))throw 0;
+    est.forEach(n=>{if(n&&n.id&&typeof n.lat==="number"&&n.nome&&!dados.some(d=>d.id===n.id))dados.push(n)});
+    des.forEach(n=>{if(n&&n.id&&Array.isArray(n.pts)&&!desenhos.some(d=>d.id===n.id))desenhos.push(n)});
+    salvar();salvarDes();desenhar();hint("Backup importado",2000)}catch(e){hint("Arquivo inválido",2500)}
+  $("file").value=""};
+const kx=s=>String(s==null?"":s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+const kc=h=>"ff"+h.slice(5,7)+h.slice(3,5)+h.slice(1,3);
+$("expKml").onclick=()=>{
+  let o='<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Mapa do Projeto</name>';
+  Object.keys(CORES).forEach(c=>{const l=dados.filter(e=>e.cat===c&&typeof e.lat==="number");if(!l.length)return;
+    o+=`<Folder><name>${kx(c)}</name>`+l.map(e=>`<Placemark><name>${kx(e.nome)}</name><description>${kx([e.end,e.tel,e.obs].filter(Boolean).join("\n"))}</description><Point><coordinates>${e.lng},${e.lat},0</coordinates></Point></Placemark>`).join("")+"</Folder>"});
+  if(desenhos.length)o+="<Folder><name>Meus desenhos</name>"+desenhos.map(d=>{
+    const st=`<Style><LineStyle><color>${kc(d.cor)}</color><width>4</width></LineStyle><PolyStyle><color>55${kc(d.cor).slice(2)}</color></PolyStyle></Style>`;
+    const c=p=>p.map(x=>x[1]+","+x[0]+",0").join(" ");
+    const g=d.tipo==="ponto"?`<Point><coordinates>${c(d.pts)}</coordinates></Point>`:d.tipo==="linha"?`<LineString><coordinates>${c(d.pts)}</coordinates></LineString>`:`<Polygon><outerBoundaryIs><LinearRing><coordinates>${c(d.pts.concat([d.pts[0]]))}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+    return `<Placemark><name>${kx(d.nome)}</name><description>${kx(d.nota)}</description>${st}${g}</Placemark>`}).join("")+"</Folder>";
+  o+="</Document></kml>";baixar("mapa-do-projeto.kml",o,"application/vnd.google-earth.kml+xml");
+  hint("No Google Meu Mapas: Criar novo mapa > Importar > selecione o arquivo",6000)};
+
+// ---- Confirmar posições uma a uma ----
+function linksConf(){if(!confAtual||!confMk)return;const p=confMk.getLatLng();$("cG").href=linkG(confAtual);$("cSV").href=linkSV(p.lat,p.lng)}
+function mostraConf(){
+  if(fi>=fila.length){const u=unico;fechar();hint(u?"Posição salva":"Pronto! Todas as posições foram revisadas",4000);return}
+  const e=dados.find(x=>x.id===fila[fi]);if(!e){fi++;mostraConf();return}
+  confAtual=e;if(confMk)map.removeLayer(confMk);
+  confMk=L.marker([e.lat,e.lng],{draggable:true,zIndexOffset:1000}).addTo(map);
+  confMk.on("dragend",linksConf);
+  $("cOk").textContent=unico?"Salvar posição":"Confirmar aqui";$("cSkip").style.display=unico?"none":"";
+  $("cinfo").innerHTML=unico?`<b>${esc(e.nome)}</b><small>${oculto(e)?"Ainda sem posição confirmada. ":""}Arraste o pino azul ou toque no mapa no lugar certo.</small>`:
+    `<b>${esc(e.nome)}</b> (${fi+1} de ${fila.length})<small>${esc(e.end||"sem endereço")} · ${esc(rotulo(e))}${e.ruaOsm?" · "+esc(e.ruaOsm):""}</small><small>Confira no Google Maps ou no Street View, depois arraste o pino azul ou toque no mapa.</small>`;
+  linksConf();$("confbar").style.display="flex";map.flyTo([e.lat,e.lng],19);
+}
+function iniciaMover(e){if(!e)return;fechar();fila=[e.id];fi=0;unico=true;modo="conf";mostraConf()}
+$("btnConf").onclick=()=>{fechar();fila=dados.filter(e=>!e.confirmado&&typeof e.lat==="number").sort((a,b)=>(b.aprox?1:0)-(a.aprox?1:0)).map(e=>e.id);
+  if(!fila.length){hint("Todas as posições já estão confirmadas",3000);return}
+  fi=0;unico=false;modo="conf";mostraConf()};
+$("cOk").onclick=()=>{const e=dados.find(x=>x.id===fila[fi]);if(e&&confMk){const p=confMk.getLatLng();e.lat=p.lat;e.lng=p.lng;e.aprox=false;e.confirmado=true;salvar();desenhar()}fi++;mostraConf()};
+$("cSkip").onclick=()=>{fi++;mostraConf()};
+$("cExit").onclick=fechar;
+
+// ---- Posicionar pelos endereços da planilha ----
+const BB="-10.940,-37.120,-10.915,-37.095";
+const SERVIDORES=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+let ultimoErro="";
+async function overpass(q){
+  for(const u of SERVIDORES){
+    const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),40000),host=u.split("/")[2];
+    try{const r=await fetch(u,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"data="+encodeURIComponent(q),signal:ctl.signal});
+      clearTimeout(to);
+      if(!r.ok){ultimoErro=host+" respondeu erro "+r.status;continue}
+      const j=await r.json();if(j&&Array.isArray(j.elements))return j.elements;
+      ultimoErro=host+" devolveu resposta inválida"}
+    catch(e){clearTimeout(to);ultimoErro=host+(e&&e.name==="AbortError"?" demorou demais":" não respondeu")}
+  }
+  return null;
+}
+async function dadosOSM(){
+  const osm={ruas:load(KEY+"_o_ruas",null),pois:load(KEY+"_o_pois",null),ends:load(KEY+"_o_ends",null)};
+  if(!osm.ruas){hint("Baixando as ruas do mapa…");
+    const el=await overpass(`[out:json][timeout:30];way["highway"]["name"](${BB});out geom;`);
+    if(el){const ruas={};el.forEach(x=>{if(x.type==="way"&&x.geometry&&x.tags&&x.tags.name)(ruas[x.tags.name]=ruas[x.tags.name]||[]).push(x.geometry.map(g=>[g.lat,g.lon]))});
+      if(Object.keys(ruas).length){osm.ruas=ruas;put(KEY+"_o_ruas",ruas)}}}
+  if(!osm.pois){hint("Baixando os estabelecimentos do mapa…");
+    const el=await overpass(`[out:json][timeout:30];(nwr["name"]["shop"](${BB});nwr["name"]["amenity"](${BB});nwr["name"]["craft"](${BB});nwr["name"]["office"](${BB});nwr["name"]["leisure"](${BB});nwr["name"]["healthcare"](${BB});nwr["name"]["tourism"](${BB}););out center;`);
+    if(el){const pois=[];el.forEach(x=>{const c=x.center||x;if(x.tags&&x.tags.name&&!x.tags.highway&&typeof c.lat==="number")pois.push([x.tags.name,c.lat,c.lon])});osm.pois=pois;put(KEY+"_o_pois",pois)}}
+  if(!osm.ends){
+    const el=await overpass(`[out:json][timeout:30];nwr["addr:housenumber"]["addr:street"](${BB});out center;`);
+    if(el){const ends=[];el.forEach(x=>{const c=x.center||x;if(x.tags&&typeof c.lat==="number")ends.push([x.tags["addr:street"],x.tags["addr:housenumber"],c.lat,c.lon])});osm.ends=ends;put(KEY+"_o_ends",ends)}}
+  return osm;
+}
+function aviso(msg){$("avisoTxt").textContent=msg;$("aviso").style.display=msg?"block":"none"}
+$("btnRetry").onclick=()=>{aviso("");localizar()};
+let ocupado=false;
+async function localizar(){
+  if(ocupado)return;
+  const alvo=dados.filter(e=>!e.confirmado);
+  if(!alvo.length)return;
+  ocupado=true;
+  const o=await dadosOSM();hint("");
+  const nr=o.ruas?Object.keys(o.ruas).length:0,np=o.pois?o.pois.length:0,ne=o.ends?o.ends.length:0;
+  $("osmStatus").textContent=`Dados do mapa: ${nr} ruas · ${np} estabelecimentos · ${ne} endereços com número.`+(ultimoErro&&(!nr||!np)?` Falha: ${ultimoErro}.`:"");
+  if(!nr&&!np){aviso("Não consegui baixar os dados do mapa ("+(ultimoErro||"sem conexão")+"). Os pontos precisam disso para aparecer. Confira a internet e tente de novo.");ocupado=false;return}
+  aviso(!nr?"Só consegui baixar parte dos dados (sem ruas). Só os estabelecimentos achados pelo nome vão aparecer.":!np?"Só consegui baixar as ruas (sem a lista de estabelecimentos). Toque em Tentar de novo para completar.":"");
+  if(!nr||!np)$("avisoTxt").parentNode.style.display="block";
+  const osm={ruas:o.ruas||{},pois:o.pois||[],ends:o.ends||[],semRuas:!nr};
+  const res=posicionar(osm,alvo);
+  alvo.forEach(e=>{const r=res[e.id];e.lat=r.lat;e.lng=r.lng;e.aprox=r.aprox;e.confirmado=false;e.como=r.como;e.ruaOsm=r.rua});
+  salvar();ocupado=false;desenhar();
+  const vis=dados.filter(x=>typeof x.lat==="number"&&!oculto(x)).map(x=>[x.lat,x.lng]);
+  if(vis.length)map.fitBounds(L.latLngBounds(vis).pad(.2),{maxZoom:17});
+  const certos=alvo.filter(e=>!oculto(e)).length,pend=alvo.length-certos;
+  hint(`${certos} posicionados com segurança`+(pend?` · ${pend} sem posição (Camadas > Estimados pela rua, ou Lista > Confirmar posições)`:""),9000);
+}
+$("reloc").onclick=()=>{fechar();["_o_ruas","_o_pois","_o_ends"].forEach(k=>{try{localStorage.removeItem(KEY+k)}catch(e){}});localizar()};
+
+desenhar();
+const jaPos=dados.filter(e=>typeof e.lat==="number"&&!oculto(e));
+if(jaPos.length)map.fitBounds(L.latLngBounds(jaPos.map(e=>[e.lat,e.lng])).pad(.2),{maxZoom:17});
+localizar();
+</script>
+</body>
+</html>
